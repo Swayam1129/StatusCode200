@@ -1,0 +1,41 @@
+# Built / generated
+*.iml
+**/.gradle
+**/build
+**/app/build
+**/captures
+*.apk
+*.aab
+*.dex
+
+# Local config (paths, SDK location – do not commit)
+**/local.properties
+
+# Signing (never commit keys)
+*.jks
+*.keystore
+**/key.properties
+
+# IDE
+**/.idea/
+*.iws
+*.ipr
+
+# Native build
+**/.externalNativeBuild
+**/.cxx
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+**/.cache/
+
+# Misc
+*.hprof
+**/out/
+.env
+.env.*
+*.local

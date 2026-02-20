@@ -6,9 +6,7 @@ plugins {
 
 android {
     namespace = "com.example.accessu"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.accessu"
@@ -57,4 +55,18 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+
+    // Camera (CameraX) - Sanika: obstacle detection
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+
+    // TFLite - Sanika: depth/object detection (for future depth model)
+    implementation(libs.tensorflow.lite)
+
+    // ML Kit Object Detection - Sanika: obstacle detection (person, chair, etc.)
+    implementation("com.google.mlkit:object-detection:17.0.2")
+
+    // Coroutines - background frame processing
+    implementation(libs.kotlinx.coroutines.android)
 }

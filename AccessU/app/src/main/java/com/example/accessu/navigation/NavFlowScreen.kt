@@ -1,6 +1,5 @@
 package com.example.accessu.navigation
 
-import android.app.Activity
 import android.Manifest
 import android.content.Intent
 import android.os.Bundle
@@ -39,6 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,7 +51,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.geometry.Offset
@@ -75,8 +77,11 @@ import com.example.accessu.ui.theme.UofAWarmGray
 import com.example.accessu.R
 import com.example.accessu.ui.theme.NunitoFont
 import com.example.accessu.ui.theme.UofACream
-import com.example.accessu.voice.AudioGuide
+import com.example.accessu.core.AudioGuide
+import com.example.accessu.mode.CameraPreview
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 private sealed class ApplyResult { object Success : ApplyResult(); object NotFound : ApplyResult(); object SameAsCurrent : ApplyResult() }
@@ -87,7 +92,8 @@ private enum class NavStep {
     SHOW_LOCATION,
     ASK_DESTINATION,
     VERIFY,
-    CONFIRMED
+    CONFIRMED,
+    NAVIGATING
 }
 
 @Composable
@@ -106,12 +112,27 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
     var pendingRetryFor by remember { mutableStateOf<Pair<String, String>?>(null) }
     var listenTimeoutHandled by remember { mutableStateOf(false) }
     var lastPartialMatch by remember { mutableStateOf<String?>(null) }
-    var useActivityRecognizer by remember { mutableStateOf(true) }
 
+    val coroutineScope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
     val hasMicPermission = ContextCompat.checkSelfPermission(
         context,
         Manifest.permission.RECORD_AUDIO
     ) == PackageManager.PERMISSION_GRANTED
+    var hasCameraPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasCameraPermission = granted
+        if (!granted) {
+            AudioGuide.speak("Camera permission is needed for navigation. Tap to retry.")
+        }
+    }
 
     fun showToast(msg: String) {
         Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
@@ -173,34 +194,6 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
         return ApplyResult.Success
     }
 
-    val activitySpeechLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val forWhat = pendingSpeechFor ?: "location"
-        pendingSpeechFor = null
-        liveListeningText = null
-        lastPartialMatch = null
-        val alternatives = if (result.resultCode == Activity.RESULT_OK) {
-            result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-        } else null
-        when (forWhat) {
-            "verify" -> handleVerifyResult(CampusLocations.firstYesNoFromAlternatives(alternatives))
-            else -> {
-                val matchedRaw = CampusLocations.firstMatchingAlternative(alternatives)
-                val rawToTry = matchedRaw ?: alternatives?.firstOrNull()?.trim()
-                if (!rawToTry.isNullOrBlank()) {
-                    when (applyFinalResult(forWhat, rawToTry)) {
-                        is ApplyResult.Success -> {}
-                        is ApplyResult.NotFound -> pendingRetryFor = forWhat to "That location wasn't found. Please say again. Say after the beep."
-                        is ApplyResult.SameAsCurrent -> pendingRetryFor = forWhat to "Sorry, you are already at that location. Where do you want to go? Say after the beep."
-                    }
-                } else {
-                    reportListenFailed(forWhat)
-                }
-            }
-        }
-    }
-
     val speechRecognizer = remember(context) {
         if (SpeechRecognizer.isRecognitionAvailable(context)) {
             SpeechRecognizer.createSpeechRecognizer(context)
@@ -211,77 +204,82 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
         onDispose { speechRecognizer?.destroy() }
     }
 
+    val speechIntent = remember {
+        Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
+        }
+    }
+
     fun launchSpeechRecognition(forWhat: String) {
         pendingSpeechFor = forWhat
         liveListeningText = "Listening..."
         lastPartialMatch = null
-        val prompt = when (forWhat) {
-            "verify" -> "Say yes or no"
-            else -> "Speak now"
+        if (speechRecognizer == null) {
+            reportListenFailed(forWhat)
+            return
         }
-        val recognizerIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US)
-            putExtra(RecognizerIntent.EXTRA_PROMPT, prompt)
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 5000)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 4000)
-        }
-        if (useActivityRecognizer) {
-            try {
-                activitySpeechLauncher.launch(recognizerIntent)
-            } catch (e: Exception) {
-                Log.e("NavFlow", "Activity speech launch failed: ${e.message}", e)
-                useActivityRecognizer = false
-                launchSpeechRecognition(forWhat)
+        speechRecognizer!!.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             }
-        } else if (speechRecognizer != null) {
-            speechRecognizer.setRecognitionListener(object : RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) {}
-                override fun onBeginningOfSpeech() {}
-                override fun onRmsChanged(rmsdB: Float) {}
-                override fun onBufferReceived(buffer: ByteArray?) {}
-                override fun onEndOfSpeech() {}
-                override fun onError(error: Int) {
-                    Log.e("NavFlow", "SpeechRecognizer error: $error")
-                    ContextCompat.getMainExecutor(context).execute {
-                        if (error == SpeechRecognizer.ERROR_NO_MATCH) useActivityRecognizer = true
-                        if (listenTimeoutHandled) {
-                            listenTimeoutHandled = false
-                            liveListeningText = null
-                            pendingSpeechFor = null
-                            lastPartialMatch = null
-                            return@execute
-                        }
-                        val partial = lastPartialMatch
-                        lastPartialMatch = null
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() {}
+            override fun onError(error: Int) {
+                Log.e("NavFlow", "SpeechRecognizer error: $error")
+                coroutineScope.launch(Dispatchers.Main) {
+                    if (listenTimeoutHandled) {
+                        listenTimeoutHandled = false
                         liveListeningText = null
                         pendingSpeechFor = null
-                        if (error == SpeechRecognizer.ERROR_NO_MATCH && !partial.isNullOrBlank()) {
-                            Log.d("NavFlow", "ERROR_NO_MATCH fallback, partial='$partial'")
-                            val matched = CampusLocations.matchLocation(partial)
-                            if (matched != null && forWhat != "verify") {
-                                applyFinalResult(forWhat, partial)
-                                return@execute
-                            }
-                            val yesNo = if (forWhat == "verify") CampusLocations.parseYesNo(partial) else null
-                            if (yesNo != null) {
-                                handleVerifyResult(yesNo)
-                                return@execute
-                            }
+                        lastPartialMatch = null
+                        return@launch
+                    }
+                    val partial = lastPartialMatch
+                    lastPartialMatch = null
+                    liveListeningText = null
+                    pendingSpeechFor = null
+                    if (error == SpeechRecognizer.ERROR_NO_MATCH && !partial.isNullOrBlank()) {
+                        val matched = CampusLocations.matchLocation(partial)
+                        if (matched != null && forWhat != "verify") {
+                            applyFinalResult(forWhat, partial)
+                            return@launch
                         }
-                        reportListenFailed(forWhat)
+                        val yesNo = if (forWhat == "verify") CampusLocations.parseYesNo(partial) else null
+                        if (yesNo != null) {
+                            handleVerifyResult(yesNo)
+                            return@launch
+                        }
+                    }
+                    reportListenFailed(forWhat)
+                }
+            }
+            override fun onPartialResults(partialResults: Bundle?) {
+                val list = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                val text = list?.firstOrNull()?.trim()
+                if (!text.isNullOrBlank()) {
+                    coroutineScope.launch(Dispatchers.Main) {
+                        liveListeningText = text
+                        lastPartialMatch = text
                     }
                 }
-                override fun onResults(results: Bundle?) {
-                    val alternatives = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    ContextCompat.getMainExecutor(context).execute {
+            }
+            override fun onResults(results: Bundle?) {
+                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                if (!matches.isNullOrEmpty()) {
+                    val raw = matches[0]?.trim() ?: ""
+                    coroutineScope.launch(Dispatchers.Main) {
+                        liveListeningText = null
+                        pendingSpeechFor = null
                         when (forWhat) {
-                            "verify" -> handleVerifyResult(CampusLocations.firstYesNoFromAlternatives(alternatives))
+                            "verify" -> handleVerifyResult(CampusLocations.firstYesNoFromAlternatives(matches))
                             else -> {
-                                val matchedRaw = CampusLocations.firstMatchingAlternative(alternatives)
-                                val rawToTry = matchedRaw ?: alternatives?.firstOrNull()?.trim()
+                                val matchedRaw = CampusLocations.firstMatchingAlternative(matches)
+                                val rawToTry = matchedRaw ?: raw
                                 when {
                                     !rawToTry.isNullOrBlank() -> {
                                         when (applyFinalResult(forWhat, rawToTry)) {
@@ -294,35 +292,23 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
                                 }
                             }
                         }
+                    }
+                } else {
+                    coroutineScope.launch(Dispatchers.Main) {
                         liveListeningText = null
                         pendingSpeechFor = null
+                        reportListenFailed(forWhat)
                     }
                 }
-                override fun onPartialResults(partialResults: Bundle?) {
-                    val list = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    val text = list?.firstOrNull()?.trim()
-                    ContextCompat.getMainExecutor(context).execute {
-                        if (!text.isNullOrBlank()) {
-                            liveListeningText = text
-                            lastPartialMatch = list?.firstNotNullOfOrNull { s ->
-                                val t = s.trim()
-                                if (t.isNotBlank()) t else null
-                            } ?: text
-                        }
-                    }
-                }
-                override fun onEvent(eventType: Int, params: Bundle?) {}
-            })
-            speechRecognizer.startListening(recognizerIntent)
-        } else {
-            liveListeningText = null
-            reportListenFailed(forWhat)
-        }
+            }
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+        })
+        speechRecognizer!!.startListening(speechIntent)
     }
 
     fun askLocationAndListen() {
         locationListenFailed = false
-        AudioGuide.speakWithCallback("Where are you located? Say after the beep.") {
+        AudioGuide.speak("Where are you located? Say after the beep.") {
             ContextCompat.getMainExecutor(context).execute {
                 AudioGuide.beep(context)
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ launchSpeechRecognition("location") }, 400)
@@ -332,7 +318,7 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
 
     fun askDestinationAndListen() {
         destinationListenFailed = false
-        AudioGuide.speakWithCallback("Where do you want to go? Say after the beep.") {
+        AudioGuide.speak("Where do you want to go? Say after the beep.") {
             ContextCompat.getMainExecutor(context).execute {
                 AudioGuide.beep(context)
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ launchSpeechRecognition("destination") }, 400)
@@ -344,7 +330,7 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
         verifyListenFailed = false
         val from = currentLocation?.fullName ?: "your location"
         val to = destination?.fullName ?: "destination"
-        AudioGuide.speakWithCallback("From $from to $to. Is that correct? Say yes or no after the beep.") {
+        AudioGuide.speak("From $from to $to. Is that correct? Say yes or no after the beep.") {
             ContextCompat.getMainExecutor(context).execute {
                 AudioGuide.beep(context)
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ launchSpeechRecognition("verify") }, 400)
@@ -375,7 +361,7 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
     LaunchedEffect(pendingRetryFor) {
         val (forWhat, message) = pendingRetryFor ?: return@LaunchedEffect
         pendingRetryFor = null
-        AudioGuide.speakWithCallback("$message") {
+        AudioGuide.speak(message) {
             ContextCompat.getMainExecutor(context).execute {
                 AudioGuide.beep(context)
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ launchSpeechRecognition(forWhat) }, 400)
@@ -418,7 +404,17 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
                 if (hasMicPermission) askVerifyAndListen()
                 else micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
             }
-            NavStep.CONFIRMED -> {}
+            NavStep.CONFIRMED -> {
+                delay(2200)
+                step = NavStep.NAVIGATING
+            }
+            NavStep.NAVIGATING -> {
+                if (hasCameraPermission) {
+                    AudioGuide.speak("Camera on. Navigating from ${currentLocation?.fullName ?: "here"} to ${destination?.fullName ?: "destination"}.")
+                } else {
+                    cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                }
+            }
         }
     }
 
@@ -484,6 +480,11 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
                 .alpha(pageBgOpacity),
             contentScale = ContentScale.Crop
         )
+        if (step == NavStep.NAVIGATING && hasCameraPermission) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                CameraPreview()
+            }
+        }
         if (step == NavStep.WELCOME) {
             var taglineVisible by remember { mutableStateOf(false) }
             LaunchedEffect(Unit) { delay(800); taglineVisible = true }
@@ -774,6 +775,36 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
                                 color = UofASlate,
                                 textAlign = TextAlign.Center
                             )
+                        }
+                    }
+                }
+                NavStep.NAVIGATING -> {
+                    if (!hasCameraPermission) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(floatingBoxModifier)
+                                .background(UofAGold)
+                                .border(2.dp, UofAWhite.copy(alpha = 0.5f), RoundedCornerShape(24.dp))
+                                .padding(32.dp)
+                                .clickable { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) }
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    "Grant Camera Permission",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = UofACharcoal,
+                                    textAlign = TextAlign.Center,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    "Tap to allow camera for navigation",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = UofASlate,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         }
                     }
                 }

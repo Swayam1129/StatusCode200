@@ -1,6 +1,8 @@
 package com.example.accessu.core
 
 import android.content.Context
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.Handler
 import android.os.Looper
 import android.speech.tts.TextToSpeech
@@ -50,6 +52,14 @@ object AudioGuide : TextToSpeech.OnInitListener {
         } else {
             queue.add(message)
         }
+    }
+
+    fun beep(context: Context) {
+        try {
+            val toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, 80)
+            toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 200)
+            Handler(Looper.getMainLooper()).postDelayed({ toneGen.release() }, 250)
+        } catch (_: Exception) {}
     }
 
     fun shutdown() {

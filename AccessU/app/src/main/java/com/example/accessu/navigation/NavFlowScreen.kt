@@ -12,10 +12,13 @@ import android.content.pm.PackageManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -43,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
@@ -51,6 +55,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.compose.material.icons.Icons
@@ -66,6 +72,8 @@ import com.example.accessu.ui.theme.UofAWhite
 import com.example.accessu.ui.theme.UofACharcoal
 import com.example.accessu.ui.theme.UofASlate
 import com.example.accessu.ui.theme.UofAWarmGray
+import com.example.accessu.R
+import com.example.accessu.ui.theme.NunitoFont
 import com.example.accessu.ui.theme.UofACream
 import com.example.accessu.voice.AudioGuide
 import kotlinx.coroutines.delay
@@ -414,31 +422,41 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
         }
     }
 
-    val innerPageBg = when (step) {
-        NavStep.WELCOME -> UofAGreen
-        NavStep.ASK_LOCATION, NavStep.SHOW_LOCATION -> UofAGreenDark
-        NavStep.ASK_DESTINATION, NavStep.VERIFY, NavStep.CONFIRMED -> UofAGreenDark
-        else -> UofAGreen
-    }
+    val innerPageBg = UofACharcoal
 
     val floatingBoxModifier = Modifier
         .shadow(12.dp, RoundedCornerShape(24.dp), ambientColor = UofAGreenDark.copy(alpha = 0.4f), spotColor = UofAGreenDark.copy(alpha = 0.3f))
         .clip(RoundedCornerShape(24.dp))
 
+    val pageBgOpacity by animateFloatAsState(
+        targetValue = 0.5f,
+        animationSpec = tween(durationMillis = 4200),
+        label = "pageBg"
+    )
+
     Column(modifier = modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(UofAGold)
-                .padding(horizontal = 24.dp, vertical = 20.dp)
-        ) {
-            Text(
-                "AccessU",
-                style = MaterialTheme.typography.headlineSmall,
-                color = UofAGreen,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Start
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(UofAGold)
+                    .padding(horizontal = 12.dp, vertical = 28.dp)
+            ) {
+                Text(
+                    "AccessU",
+                    style = MaterialTheme.typography.displayMedium,
+                    color = UofAGreenDark,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = NunitoFont,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Start
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(5.dp)
+                    .background(UofAWhite)
             )
         }
         Box(
@@ -458,6 +476,45 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
             },
         contentAlignment = Alignment.Center
     ) {
+        Image(
+            painter = painterResource(R.drawable.campus_welcome_bg),
+            contentDescription = null,
+            modifier = Modifier
+                .fillMaxSize()
+                .alpha(pageBgOpacity),
+            contentScale = ContentScale.Crop
+        )
+        if (step == NavStep.WELCOME) {
+            var taglineVisible by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { delay(800); taglineVisible = true }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth()
+                    .padding(top = 32.dp, start = 24.dp, end = 24.dp)
+            ) {
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = taglineVisible,
+                    enter = fadeIn(animationSpec = tween(1500))
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.Start,
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        listOf("YOUR", "FAVOURITE", "NAVIGATION", "APP").forEach { word ->
+                            Text(
+                                word,
+                                style = MaterialTheme.typography.displayLarge,
+                                color = UofAGold,
+                                fontWeight = FontWeight.Black,
+                                fontFamily = NunitoFont
+                            )
+                        }
+                    }
+                }
+            }
+        }
         Column(
             modifier = Modifier
                 .fillMaxWidth(0.94f)
@@ -467,31 +524,22 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
         ) {
             when (step) {
                 NavStep.WELCOME -> {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(28.dp)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(floatingBoxModifier)
+                            .background(UofAGold)
+                            .border(4.dp, UofAWhite, RoundedCornerShape(24.dp))
+                            .padding(36.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .then(floatingBoxModifier)
-                                .background(UofAGold)
-                                .border(2.dp, UofAWhite.copy(alpha = 0.5f), RoundedCornerShape(24.dp))
-                                .padding(36.dp)
-                        ) {
-                            Text(
-                                "Access U",
-                                style = MaterialTheme.typography.headlineLarge,
-                                color = UofAGreen,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.Center
-                            )
-                        }
                         Text(
                             "Tap anywhere to begin",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = UofAGoldLight
+                            style = MaterialTheme.typography.headlineLarge,
+                            color = UofAGreenDark,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = NunitoFont,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center
                         )
                     }
                 }

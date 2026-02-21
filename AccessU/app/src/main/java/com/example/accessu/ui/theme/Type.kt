@@ -13,13 +13,41 @@ val NunitoFont = FontFamily(
     Font(R.font.nunito_bold, FontWeight.Bold)
 )
 
+val QuicksandFont = FontFamily(
+    Font(R.font.quicksand_regular, FontWeight.Normal)
+)
+
 val Typography = Typography(
+    displayLarge = TextStyle(
+        fontFamily = NunitoFont,
+        fontWeight = FontWeight.Bold,
+        fontSize = 42.sp,
+        lineHeight = 48.sp
+    ),
+    displayMedium = TextStyle(
+        fontFamily = NunitoFont,
+        fontWeight = FontWeight.Bold,
+        fontSize = 34.sp,
+        lineHeight = 40.sp
+    ),
+    displaySmall = TextStyle(
+        fontFamily = NunitoFont,
+        fontWeight = FontWeight.Bold,
+        fontSize = 16.sp,
+        lineHeight = 22.sp
+    ),
     headlineLarge = TextStyle(
         fontFamily = NunitoFont,
         fontWeight = FontWeight.Bold,
         fontSize = 28.sp,
         lineHeight = 36.sp,
         letterSpacing = (-0.5).sp
+    ),
+    headlineMedium = TextStyle(
+        fontFamily = NunitoFont,
+        fontWeight = FontWeight.Bold,
+        fontSize = 26.sp,
+        lineHeight = 32.sp
     ),
     headlineSmall = TextStyle(
         fontFamily = NunitoFont,

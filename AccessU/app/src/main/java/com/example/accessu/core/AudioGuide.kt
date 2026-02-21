@@ -1,42 +1,57 @@
 package com.example.accessu.core
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import java.util.*
 
 object AudioGuide : TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = null
     private var isReady = false
-    private val queue = mutableListOf<String>() // Queue messages until TTS is ready
+    private val queue = mutableListOf<String>()
 
-    // Initialize TTS
+    private var onDoneCallback: (() -> Unit)? = null
+
     fun init(context: Context) {
         tts = TextToSpeech(context, this)
     }
 
-    // Called when TTS engine is ready
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             tts?.language = Locale.US
             isReady = true
 
-            // Play any queued messages
+            tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) {}
+
+                override fun onDone(utteranceId: String?) {
+                    // NEW: Force the callback back onto the Main UI Thread
+                    Handler(Looper.getMainLooper()).post {
+                        onDoneCallback?.invoke()
+                        onDoneCallback = null
+                    }
+                }
+
+                override fun onError(utteranceId: String?) {}
+            })
+
             queue.forEach { speak(it) }
             queue.clear()
         }
     }
 
-    // Speak text (dynamic)
-    fun speak(message: String) {
+    fun speak(message: String, onDone: (() -> Unit)? = null) {
         if (isReady) {
-            tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "AudioGuideID")
+            onDoneCallback = onDone
+            val utteranceId = UUID.randomUUID().toString()
+            tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
         } else {
-            // TTS not ready yet, save it for later
             queue.add(message)
         }
     }
 
-    // Shutdown TTS safely
     fun shutdown() {
         tts?.stop()
         tts?.shutdown()

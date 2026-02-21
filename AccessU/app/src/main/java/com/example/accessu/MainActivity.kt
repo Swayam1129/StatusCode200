@@ -11,7 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import com.example.accessu.obstacle.ObstacleCameraScreen
+import com.example.accessu.navigation.NavFlowScreen
 import com.example.accessu.ui.theme.AccessUTheme
 
 class MainActivity : ComponentActivity() {
@@ -21,9 +21,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             AccessUTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    // Sanika: Obstacle camera screen - Task 1 camera pipeline
-                    ObstacleCameraScreen(
-                        isActive = true,
+                    // Voice-first nav flow → obstacle camera
+                    NavFlowScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(innerPadding)

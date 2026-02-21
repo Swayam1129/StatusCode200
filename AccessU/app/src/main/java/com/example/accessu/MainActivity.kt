@@ -21,7 +21,6 @@ class MainActivity : ComponentActivity() {
         setContent {
             AccessUTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    // Voice-first nav flow → obstacle camera
                     NavFlowScreen(
                         modifier = Modifier
                             .fillMaxSize()
@@ -34,9 +33,9 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
+fun Greeting(text: String, modifier: Modifier = Modifier) {
     Text(
-        text = "Hello $name!",
+        text = text,
         modifier = modifier
     )
 }
@@ -45,6 +44,6 @@ fun Greeting(name: String, modifier: Modifier = Modifier) {
 @Composable
 fun GreetingPreview() {
     AccessUTheme {
-        Greeting("Android")
+        Greeting("Hello Android")
     }
 }

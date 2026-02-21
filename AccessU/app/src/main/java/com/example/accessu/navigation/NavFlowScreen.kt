@@ -13,8 +13,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -29,6 +34,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -57,8 +65,10 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.compose.material.icons.Icons
@@ -78,7 +88,9 @@ import com.example.accessu.R
 import com.example.accessu.ui.theme.NunitoFont
 import com.example.accessu.ui.theme.UofACream
 import com.example.accessu.core.AudioGuide
-import com.example.accessu.mode.CameraPreview
+import com.example.accessu.obstacle.ObstacleCameraScreen
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -138,13 +150,23 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
         Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
     }
 
-    fun reportListenFailed(forWhat: String) {
+    fun reportListenFailed(forWhat: String, autoRetry: Boolean = true) {
         when (forWhat) {
-            "location" -> locationListenFailed = true
-            "destination" -> destinationListenFailed = true
-            "verify" -> verifyListenFailed = true
+            "location" -> locationListenFailed = !autoRetry
+            "destination" -> destinationListenFailed = !autoRetry
+            "verify" -> verifyListenFailed = !autoRetry
         }
-        AudioGuide.speak("Couldn't hear you. Tap to try again.")
+        if (autoRetry) {
+            val message = when (forWhat) {
+                "location" -> "Sorry, I couldn't catch you. Where are you located? Say after the beep."
+                "destination" -> "Sorry, I couldn't catch you. Where do you want to go? Say after the beep."
+                "verify" -> "Sorry, I couldn't catch you. Yes or no? Say after the beep."
+                else -> "Sorry, I couldn't catch you. Tap to try again."
+            }
+            pendingRetryFor = forWhat to message
+        } else {
+            AudioGuide.speak("Sorry, I couldn't catch you. Tap to try again.")
+        }
     }
 
     fun handleVerifyResult(yesNo: Boolean?) {
@@ -154,9 +176,6 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
             true -> {
                 verifyListenFailed = false
                 step = NavStep.CONFIRMED
-                val from = currentLocation?.fullName ?: "your location"
-                val to = destination?.fullName ?: "destination"
-                AudioGuide.speak("Confirmed. From $from to $to.")
             }
             false -> {
                 destination = null
@@ -165,8 +184,7 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
                 step = NavStep.ASK_DESTINATION
             }
             null -> {
-                verifyListenFailed = true
-                AudioGuide.speak("Couldn't hear you. Say yes or no.")
+                reportListenFailed("verify")
             }
         }
     }
@@ -218,7 +236,7 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
         liveListeningText = "Listening..."
         lastPartialMatch = null
         if (speechRecognizer == null) {
-            reportListenFailed(forWhat)
+            reportListenFailed(forWhat, autoRetry = false)
             return
         }
         speechRecognizer!!.setRecognitionListener(object : RecognitionListener {
@@ -405,7 +423,13 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
                 else micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
             }
             NavStep.CONFIRMED -> {
-                delay(2200)
+                val from = currentLocation?.fullName ?: "your location"
+                val to = destination?.fullName ?: "destination"
+                kotlin.coroutines.suspendCoroutine<Unit> { cont ->
+                    AudioGuide.speak("Confirmed. From $from to $to.") {
+                        cont.resume(Unit)
+                    }
+                }
                 step = NavStep.NAVIGATING
             }
             NavStep.NAVIGATING -> {
@@ -435,8 +459,9 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
                     .background(UofAGold)
-                    .padding(horizontal = 12.dp, vertical = 28.dp)
+                    .padding(horizontal = 12.dp, vertical = 32.dp)
             ) {
                 Text(
                     "AccessU",
@@ -482,7 +507,7 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
         )
         if (step == NavStep.NAVIGATING && hasCameraPermission) {
             Box(modifier = Modifier.fillMaxSize()) {
-                CameraPreview()
+                ObstacleCameraScreen(isActive = true)
             }
         }
         if (step == NavStep.WELCOME) {
@@ -518,7 +543,7 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
         }
         Column(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
+                .fillMaxWidth(0.98f)
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
@@ -547,8 +572,12 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
                 NavStep.ASK_LOCATION, NavStep.SHOW_LOCATION -> {
                     Text(
                         "Current location",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = UofACream
+                        style = MaterialTheme.typography.displayLarge,
+                        color = UofAGold,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = NunitoFont,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(20.dp))
                     Box(
@@ -557,7 +586,7 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
                             .then(floatingBoxModifier)
                             .background(UofAGold)
                             .border(2.dp, UofAWhite.copy(alpha = 0.5f), RoundedCornerShape(24.dp))
-                            .padding(32.dp)
+                            .padding(36.dp)
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -565,13 +594,15 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
                         ) {
                             val displayText = when {
                                 currentLocation != null -> currentLocation!!.fullName
-                                locationListenFailed -> "Couldn't hear you. Tap to try again."
+                                locationListenFailed -> "Sorry, I couldn't catch you. Tap to try again."
                                 else -> (liveListeningText?.takeIf { pendingSpeechFor == "location" } ?: "Listening...")
                             }
                             Text(
                                 displayText,
-                                style = MaterialTheme.typography.bodyLarge,
+                                style = MaterialTheme.typography.headlineMedium,
                                 color = UofAGreenDark,
+                                fontWeight = FontWeight.SemiBold,
+                                fontFamily = NunitoFont,
                                 textAlign = TextAlign.Center
                             )
                             if (currentLocation != null && currentLocation!!.fullName != currentLocation!!.abbreviation) {
@@ -640,27 +671,96 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
                     }
                     Spacer(modifier = Modifier.height(32.dp))
                     val lineHeight = 160.dp
-                    Box(
+                    val pinSize = 56.dp
+                    val curveAmount = 48.dp
+                    BoxWithConstraints(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(lineHeight),
-                        contentAlignment = Alignment.Center
+                            .height(lineHeight)
                     ) {
+                        val density = androidx.compose.ui.platform.LocalDensity.current
+                        val curveAmountPx = with(density) { curveAmount.toPx() }
                         Canvas(modifier = Modifier.fillMaxWidth().height(lineHeight)) {
                             val strokeWidth = 2.5.dp.toPx()
                             val midX = size.width / 2
-                            drawLine(
+                            val h = size.height
+                            val path = Path().apply {
+                                moveTo(midX, 0f)
+                                quadraticTo(midX + curveAmountPx, h * 0.17f, midX, h * 0.33f)
+                                quadraticTo(midX - curveAmountPx, h * 0.5f, midX, h * 0.67f)
+                                quadraticTo(midX + curveAmountPx, h * 0.83f, midX, h)
+                            }
+                            drawPath(
+                                path = path,
                                 color = UofAGoldLight.copy(alpha = 0.9f),
-                                start = Offset(midX, 0f),
-                                end = Offset(midX, size.height),
-                                strokeWidth = strokeWidth
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth)
                             )
-                            val dotY = size.height * arrowProgress
-                            drawCircle(
-                                color = UofAGreenLight,
-                                radius = 6.dp.toPx(),
-                                center = Offset(midX, dotY)
+                        }
+                        if (destination != null) {
+                            val pinReached = arrowProgress >= 0.98f
+                            val infiniteTransition = rememberInfiniteTransition(label = "blink")
+                            val blinkAlpha by infiniteTransition.animateFloat(
+                                initialValue = 1f,
+                                targetValue = if (pinReached) 0.65f else 1f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(500),
+                                    repeatMode = RepeatMode.Reverse
+                                ),
+                                label = "blinkAlpha"
                             )
+                            val t = arrowProgress
+                            val wPx = with(density) { maxWidth.toPx() }
+                            val hPx = with(density) { maxHeight.toPx() }
+                            val midX = wPx / 2
+                            val h = hPx
+                            val (curveX, curveY) = when {
+                                t < 0.333f -> {
+                                    val u = t / 0.333f
+                                    val u1 = 1 - u
+                                    val x = u1 * u1 * midX + 2 * u1 * u * (midX + curveAmountPx) + u * u * midX
+                                    val y = u1 * u1 * 0f + 2 * u1 * u * (h * 0.17f) + u * u * (h * 0.33f)
+                                    x to y
+                                }
+                                t < 0.667f -> {
+                                    val u = (t - 0.333f) / 0.334f
+                                    val u1 = 1 - u
+                                    val x = u1 * u1 * midX + 2 * u1 * u * (midX - curveAmountPx) + u * u * midX
+                                    val y = u1 * u1 * (h * 0.33f) + 2 * u1 * u * (h * 0.5f) + u * u * (h * 0.67f)
+                                    x to y
+                                }
+                                else -> {
+                                    val u = (t - 0.667f) / 0.333f
+                                    val u1 = 1 - u
+                                    val x = u1 * u1 * midX + 2 * u1 * u * (midX + curveAmountPx) + u * u * midX
+                                    val y = u1 * u1 * (h * 0.67f) + 2 * u1 * u * (h * 0.83f) + u * u * h
+                                    x to y
+                                }
+                            }
+                            val pinHalf = with(density) { (pinSize / 2).toPx() }
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .offset { IntOffset((curveX - pinHalf).toInt(), (curveY - pinHalf).toInt()) }
+                                    .size(pinSize)
+                            ) {
+                                Canvas(modifier = Modifier.fillMaxSize()) {
+                                    val centerX = size.width / 2
+                                    val centerY = size.height * 0.4f
+                                    drawCircle(
+                                        color = UofAWhite,
+                                        radius = 12.dp.toPx(),
+                                        center = Offset(centerX, centerY)
+                                    )
+                                }
+                                Icon(
+                                    Icons.Default.Place,
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .alpha(if (arrowProgress >= 0.98f) blinkAlpha else 1f),
+                                    tint = AccessUDestPin
+                                )
+                            }
                         }
                     }
                     Spacer(modifier = Modifier.height(32.dp))
@@ -669,29 +769,6 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                        if (destination != null) {
-                            val pinScale by animateFloatAsState(
-                                targetValue = 1f,
-                                animationSpec = keyframes {
-                                    durationMillis = 600
-                                    0f at 0
-                                    1.55f at 180
-                                    0.92f at 320
-                                    1.08f at 420
-                                    1f at 600
-                                },
-                                label = "pin"
-                            )
-                            Icon(
-                                Icons.Default.Place,
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size(64.dp)
-                                    .scale(pinScale)
-                                    .padding(end = 14.dp),
-                                tint = AccessUDestPin
-                            )
-                        }
                         Box(
                             modifier = Modifier
                                 .weight(1f)
@@ -706,12 +783,12 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
                             ) {
                                 val destDisplayText = when {
                                     destination != null -> destination!!.fullName
-                                    destinationListenFailed -> "Couldn't hear you. Tap to try again."
+                                    destinationListenFailed -> "Sorry, I couldn't catch you. Tap to try again."
                                     else -> (liveListeningText?.takeIf { pendingSpeechFor == "destination" } ?: "Listening...")
                                 }
                                 val verifyStatusText = when {
                                     step == NavStep.VERIFY && pendingSpeechFor == "verify" -> (liveListeningText ?: "Listening...")
-                                    step == NavStep.VERIFY && verifyListenFailed -> "Say yes or no. Tap to try again."
+                                    step == NavStep.VERIFY && verifyListenFailed -> "Sorry, I couldn't catch you. Tap to try again."
                                     else -> null
                                 }
                                 Text(

@@ -10,6 +10,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.accessu.navigation.NavFlowScreen
 import com.example.accessu.ui.theme.AccessUTheme
@@ -21,10 +22,15 @@ class MainActivity : ComponentActivity() {
         setContent {
             AccessUTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    val layoutDirection = LocalLayoutDirection.current
                     NavFlowScreen(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(innerPadding)
+                            .padding(
+                                start = innerPadding.calculateLeftPadding(layoutDirection),
+                                end = innerPadding.calculateRightPadding(layoutDirection),
+                                bottom = innerPadding.calculateBottomPadding()
+                            )
                     )
                 }
             }

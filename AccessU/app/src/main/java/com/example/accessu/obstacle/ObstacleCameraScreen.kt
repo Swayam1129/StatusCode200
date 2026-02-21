@@ -33,7 +33,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import com.example.accessu.voice.AudioGuide
+import com.example.accessu.core.AudioGuide
 
 /**
  * Composable camera screen for obstacle detection.

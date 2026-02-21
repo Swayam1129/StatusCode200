@@ -573,7 +573,7 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
                     Text(
                         "Current location",
                         style = MaterialTheme.typography.displayLarge,
-                        color = UofAGold,
+                        color = UofAWhite,
                         fontWeight = FontWeight.Black,
                         fontFamily = NunitoFont,
                         modifier = Modifier.fillMaxWidth(),
@@ -631,10 +631,19 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
                         animationSpec = tween(1000),
                         label = "arrow"
                     )
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.Top,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
                     Text(
-                        if (step == NavStep.VERIFY) "Confirm: From → To" else "From → To",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = UofAGoldLight
+                        if (step == NavStep.VERIFY) "CONFIRM: FROM → TO" else "FROM → TO",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = UofAWhite,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = NunitoFont,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
                     )
                     if (step == NavStep.VERIFY) {
                         Spacer(modifier = Modifier.height(8.dp))
@@ -656,8 +665,10 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                             Text(
                                 currentLocation?.fullName ?: "",
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = MaterialTheme.typography.bodyLarge,
                                 color = UofAGreenDark,
+                                fontWeight = FontWeight.SemiBold,
+                                fontFamily = NunitoFont,
                                 textAlign = TextAlign.Center
                             )
                             if (currentLocation != null && currentLocation!!.fullName != currentLocation!!.abbreviation) {
@@ -793,8 +804,10 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
                                 }
                                 Text(
                                     destDisplayText,
-                                    style = MaterialTheme.typography.bodyLarge,
+                                    style = MaterialTheme.typography.headlineSmall,
                                     color = UofACharcoal,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontFamily = NunitoFont,
                                     textAlign = TextAlign.Center
                                 )
                                 if (verifyStatusText != null) {
@@ -827,6 +840,7 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
                         }
                     }
                 }
+                    }
                 }
                 NavStep.CONFIRMED -> {
                     Box(

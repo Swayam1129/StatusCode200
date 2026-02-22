@@ -22,11 +22,12 @@ object CampusLocations {
         "nref" to LocationInfo("Natural Resources Engineering Facility", "NREF")
     )
 
-    // Word-form only: CAB, SAB, SUB
+    // Word-form only: CAB, SAB, SUB, GSB
     private val wordAbbrevs = mapOf(
         "cab" to LocationInfo("Central Academic Building", "CAB"),
         "sab" to LocationInfo("South Academic Building", "SAB"),
-        "sub" to LocationInfo("Students' Union Building", "SUB")
+        "sub" to LocationInfo("Students' Union Building", "SUB"),
+        "gsb" to LocationInfo("General Services Building", "GSB")
     )
 
     // Full phrase buildings - expanded variants for common STT mishearings
@@ -50,6 +51,9 @@ object CampusLocations {
         ),
         LocationInfo("University Commons Building", "University Commons") to listOf(
             "university commons", "uni commons", "commons building", "commons", "the commons"
+        ),
+        LocationInfo("Cameron Library", "Cameron Library") to listOf(
+            "cameron", "cameron library", "cameron library building", "the cameron library"
         )
     )
 
@@ -61,6 +65,8 @@ object CampusLocations {
         "CAB (Central Academic Building)",
         "SAB (South Academic Building)",
         "SUB (Students' Union Building)",
+        "Cameron Library",
+        "GSB (General Services Building)",
         "Tory Building",
         "Bus stop near SUB",
         "University bus stop",

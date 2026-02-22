@@ -1,0 +1,65 @@
+{
+  "pathId": "ccis_to_cameron",
+  "nodes": [
+    {
+      "id": "n1",
+      "name": "CCIS main entrance",
+      "instruction": "You are at the CCIS main entrance. Cameron Library is to the right. Turn right and start walking toward Student Services.",
+      "nextNodeId": "n2"
+    },
+    {
+      "id": "n2",
+      "name": "Student Services corridor decision",
+      "instruction": "You have passed Student Services. The corridor ends here. Turn right to continue toward Chemistry and CAB.",
+      "nextNodeId": "n3"
+    },
+    {
+      "id": "n3",
+      "name": "Door approaching to Chemistry link",
+      "instruction": "Door approaching in about 3 to 5 meters. Continue forward to the door into the Chemistry building.",
+      "nextNodeId": "n4"
+    },
+    {
+      "id": "n4",
+      "name": "Enter Chemistry building",
+      "instruction": "You have entered the Chemistry building. Continue straight through the hallway.",
+      "nextNodeId": "n5"
+    },
+    {
+      "id": "n5",
+      "name": "Chemistry halfway intersection",
+      "instruction": "You are at an intersection in the Chemistry building. Continue straight toward the CAB connection.",
+      "nextNodeId": "n6"
+    },
+    {
+      "id": "n6",
+      "name": "Door approaching to CAB",
+      "instruction": "Door approaching in about 3 to 5 meters. Continue forward to the door into the CAB building.",
+      "nextNodeId": "n7"
+    },
+    {
+      "id": "n7",
+      "name": "CAB building entrance and intersection",
+      "instruction": "You have entered the CAB building. An intersection is ahead. Walk forward to the intersection.",
+      "nextNodeId": "n8"
+    },
+    {
+      "id": "n8",
+      "name": "CAB intersection turn left for Cameron",
+      "instruction": "You are at the CAB intersection. Turn left to go toward Cameron Library.",
+      "nextNodeId": "n9"
+    },
+    {
+      "id": "n9",
+      "name": "Cameron hallway and stairs ahead",
+      "instruction": "You are in the hallway toward Cameron Library. Stairs going down are ahead. Walk carefully and prepare to go down the stairs.",
+      "nextNodeId": "n10"
+    },
+    {
+      "id": "n10",
+      "name": "Cameron Library main desk",
+      "instruction": "You have entered Cameron Library. Continue forward to the main desk. You have reached your destination.",
+      "nextNodeId": null
+    }
+  ]
+}

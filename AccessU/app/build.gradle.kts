@@ -28,8 +28,9 @@ android {
 
         val localProps = Properties()
         rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { localProps.load(it) }
-        val apiKey = localProps.getProperty("OPENWEATHER_API_KEY", "") ?: ""
-        buildConfigField("String", "OPENWEATHER_API_KEY", "\"$apiKey\"")
+        val mapsKey = localProps.getProperty("GOOGLE_MAPS_API_KEY", "") ?: ""
+        buildConfigField("String", "GOOGLE_MAPS_API_KEY", "\"$mapsKey\"")
+        manifestPlaceholders["GOOGLE_MAPS_API_KEY"] = mapsKey
     }
 
     buildTypes {
@@ -57,6 +58,7 @@ android {
 dependencies {
 
     implementation(libs.androidx.core.ktx)
+    implementation("androidx.appcompat:appcompat:1.6.1")
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
@@ -73,7 +75,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
-    // Camera (CameraX) - obstacle detection
+    // Camera (CameraX) - obstacle detection + indoor QR
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
@@ -81,9 +83,18 @@ dependencies {
     // TFLite - depth/object detection (for future depth model)
     implementation(libs.tensorflow.lite)
 
-    // ML Kit Object Detection - obstacle detection (person, chair, etc.)
+    // ML Kit - obstacle + barcode
     implementation("com.google.mlkit:object-detection:17.0.2")
+    implementation("com.google.mlkit:barcode-scanning:17.2.0")
 
-    // Coroutines - background frame processing
+    // Coroutines
     implementation(libs.kotlinx.coroutines.android)
+
+    // JSON + HTTP for path metadata
+    implementation("com.google.code.gson:gson:2.10.1")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // Outdoor navigation - GPS and maps
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+    implementation("com.google.android.gms:play-services-maps:18.2.0")
 }

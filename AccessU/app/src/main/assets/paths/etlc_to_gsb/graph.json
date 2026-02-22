@@ -1,0 +1,10 @@
+{
+  "pathId": "etlc_to_gsb",
+  "nodes": [
+    {"id": "n1", "name": "ETLC entrance", "instruction": "You're at the ETLC entrance. Walk straight toward the main corridor.", "nextNodeId": "n2"},
+    {"id": "n2", "name": "ETLC corridor", "instruction": "Continue straight. Head toward Discovery Commons.", "nextNodeId": "n3"},
+    {"id": "n3", "name": "Discovery Commons", "instruction": "You're at Discovery Commons. Turn toward NREF, Natural Resources Engineering Facility.", "nextNodeId": "n4"},
+    {"id": "n4", "name": "NREF connection", "instruction": "Walk past NREF toward GSB, General Services Building.", "nextNodeId": "n5"},
+    {"id": "n5", "name": "GSB entrance", "instruction": "You've arrived at GSB, General Services Building.", "nextNodeId": null}
+  ]
+}

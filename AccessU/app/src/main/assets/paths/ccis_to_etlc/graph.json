@@ -1,0 +1,23 @@
+{
+  "pathId": "ccis_to_etlc",
+  "nodes": [
+    {
+      "id": "n1",
+      "name": "CCIS entrance",
+      "instruction": "You're at CCIS. Walk toward the main hallway.",
+      "nextNodeId": "n2"
+    },
+    {
+      "id": "n2",
+      "name": "Hallway junction",
+      "instruction": "Turn left. Head toward ETLC.",
+      "nextNodeId": "n3"
+    },
+    {
+      "id": "n3",
+      "name": "ETLC entrance",
+      "instruction": "You've arrived at ETLC.",
+      "nextNodeId": null
+    }
+  ]
+}

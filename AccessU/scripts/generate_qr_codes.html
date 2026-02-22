@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>AccessU QR Code Generator</title>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <style>
+    body { font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 0 20px; }
+    .node { margin: 24px 0; padding: 16px; border: 1px solid #ccc; border-radius: 8px; }
+    .node h3 { margin-top: 0; }
+    canvas, img { display: block; margin: 12px 0; border: 1px solid #eee; }
+    @media print { body { max-width: none; } .node { break-inside: avoid; } }
+  </style>
+</head>
+<body>
+  <h1>AccessU QR Codes</h1>
+  <p>Print this page and cut out each QR code. Place them along your path.</p>
+  <p><strong>Format:</strong> pathId:nodeId (e.g. etlc_to_busstop:n1)</p>
+
+  <h2>CCIS → Cameron Library</h2>
+  <div id="ccis_to_cameron"></div>
+
+  <h2>ETLC → Bus Stop</h2>
+  <div id="etlc_to_busstop"></div>
+
+  <h2>CCIS → ETLC</h2>
+  <div id="ccis_to_etlc"></div>
+
+  <script>
+    const paths = {
+      ccis_to_cameron: [
+        { id: 'n1', name: 'CCIS main entrance' },
+        { id: 'n2', name: 'Right turn to Chem' },
+        { id: 'n3', name: 'CCIS to Chem pathway' },
+        { id: 'n4', name: 'Chem building' },
+        { id: 'n5', name: 'CAB and Tim Hortons intersection' },
+        { id: 'n6', name: 'Cameron Library entrance stairs' },
+        { id: 'n7', name: 'Cameron Library' }
+      ],
+      etlc_to_busstop: [
+        { id: 'n1', name: 'ETLC entrance' },
+        { id: 'n2', name: 'First junction' },
+        { id: 'n3', name: 'Building exit' },
+        { id: 'n4', name: 'Bus stop' }
+      ],
+      ccis_to_etlc: [
+        { id: 'n1', name: 'CCIS entrance' },
+        { id: 'n2', name: 'Hallway junction' },
+        { id: 'n3', name: 'ETLC entrance' }
+      ]
+    };
+
+    async function generate() {
+      for (const [pathId, nodes] of Object.entries(paths)) {
+        const container = document.getElementById(pathId);
+        if (!container) continue;
+        for (const node of nodes) {
+          const value = `${pathId}:${node.id}`;
+          const div = document.createElement('div');
+          div.className = 'node';
+          div.innerHTML = `<h3>${pathId} – ${node.name} (${node.id})</h3><p><code>${value}</code></p>`;
+          const canvas = document.createElement('canvas');
+          await QRCode.toCanvas(canvas, value, { width: 200, margin: 2 });
+          div.appendChild(canvas);
+          container.appendChild(div);
+        }
+      }
+    }
+    generate();
+  </script>
+</body>
+</html>

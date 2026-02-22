@@ -1,0 +1,29 @@
+{
+  "pathId": "etlc_to_busstop",
+  "nodes": [
+    {
+      "id": "n1",
+      "name": "ETLC entrance",
+      "instruction": "You're at the ETLC entrance. Walk straight down the main hallway.",
+      "nextNodeId": "n2"
+    },
+    {
+      "id": "n2",
+      "name": "First junction",
+      "instruction": "Turn right here. Continue toward the exit.",
+      "nextNodeId": "n3"
+    },
+    {
+      "id": "n3",
+      "name": "Building exit",
+      "instruction": "You're at the exit. Cross to the bus stop ahead.",
+      "nextNodeId": "n4"
+    },
+    {
+      "id": "n4",
+      "name": "Bus stop",
+      "instruction": "You've arrived at the bus stop.",
+      "nextNodeId": null
+    }
+  ]
+}

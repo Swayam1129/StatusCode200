@@ -1,0 +1,9 @@
+{
+  "id": "ccis_to_etlc",
+  "name": "CCIS to ETLC",
+  "description": "Indoor path from CCIS to ETLC building",
+  "origin": "CCIS",
+  "destination": "ETLC",
+  "keyframeCount": 0,
+  "estimatedDurationSeconds": 180
+}

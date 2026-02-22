@@ -1,0 +1,16 @@
+[
+  {"id":"ccis","name":"CCIS","fullName":"Centennial Centre for Interdisciplinary Science","lat":53.5215,"lon":-113.526},
+  {"id":"tory","name":"Tory","fullName":"Henry Marshall Tory Building","lat":53.523,"lon":-113.521},
+  {"id":"cab","name":"CAB","fullName":"Central Academic Building","lat":53.524,"lon":-113.525},
+  {"id":"sub","name":"SUB","fullName":"Students' Union Building","lat":53.524,"lon":-113.527},
+  {"id":"hub","name":"HUB","fullName":"HUB Mall","lat":53.524,"lon":-113.526},
+  {"id":"etlc","name":"ETLC","fullName":"Engineering Teaching and Learning Complex","lat":53.523,"lon":-113.528},
+  {"id":"rutherford","name":"Rutherford","fullName":"Rutherford Library","lat":53.524,"lon":-113.524},
+  {"id":"education","name":"Education","fullName":"Education Building","lat":53.523,"lon":-113.522},
+  {"id":"arts","name":"Arts","fullName":"Arts Building","lat":53.524,"lon":-113.524},
+  {"id":"biosci","name":"BioSci","fullName":"Biological Sciences","lat":53.522,"lon":-113.524},
+  {"id":"admin","name":"Admin","fullName":"Administration Building","lat":53.523,"lon":-113.523},
+  {"id":"triffo","name":"Triffo","fullName":"Triffo Hall","lat":53.523,"lon":-113.523},
+  {"id":"nint","name":"NINT","fullName":"National Institute for Nanotechnology","lat":53.521,"lon":-113.528},
+  {"id":"easa","name":"EASA","fullName":"East Academic Building","lat":53.52,"lon":-113.505}
+]

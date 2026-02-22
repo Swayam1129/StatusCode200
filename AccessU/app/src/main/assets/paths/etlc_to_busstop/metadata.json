@@ -1,0 +1,9 @@
+{
+  "id": "etlc_to_busstop",
+  "name": "ETLC to Bus Stop",
+  "description": "Indoor path from ETLC to University Transit Centre bus stop",
+  "origin": "ETLC",
+  "destination": "University Transit Centre",
+  "keyframeCount": 0,
+  "estimatedDurationSeconds": 120
+}

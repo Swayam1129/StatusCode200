@@ -40,9 +40,12 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -89,6 +92,11 @@ import com.example.accessu.ui.theme.NunitoFont
 import com.example.accessu.ui.theme.UofACream
 import com.example.accessu.core.AudioGuide
 import com.example.accessu.obstacle.ObstacleCameraScreen
+import com.example.accessu.paths.CameraNavigationActivity
+import com.example.accessu.campus.CampusGraphRepository
+import com.example.accessu.campus.OutdoorNavigationActivity
+import com.example.accessu.campus.ResolvedNode
+import com.example.accessu.indoor.IndoorGenericNavigationActivity
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 import kotlinx.coroutines.Dispatchers
@@ -97,6 +105,26 @@ import kotlinx.coroutines.launch
 import java.util.Locale
 
 private sealed class ApplyResult { object Success : ApplyResult(); object NotFound : ApplyResult(); object SameAsCurrent : ApplyResult() }
+
+/** Map voice LocationInfo to campus graph node id for indoor path lookup. */
+private fun locationToNodeId(loc: LocationInfo?): String? {
+    if (loc == null) return null
+    val ab = loc.abbreviation.trim().lowercase()
+    val full = loc.fullName.trim().lowercase()
+    when {
+        ab == "ccis" || full.contains("centennial") -> return "ccis"
+        ab == "etlc" || full.contains("engineering teaching") -> return "etlc"
+        ab == "nref" || full.contains("natural resources") -> return "nref"
+        ab == "cab" || full.contains("central academic") -> return "cab"
+        ab == "sab" || full.contains("south academic") -> return "sab"
+        ab == "sub" || full.contains("students' union") -> return "sub"
+        ab == "tory" || full.contains("tory") -> return "tory"
+        ab.contains("cameron") || full.contains("cameron") -> return "cameron"
+        ab == "gsb" || full.contains("general services") -> return "gsb"
+        ab.contains("bus stop") || full.contains("bus stop") || full.contains("university transit") -> return "university_transit"
+        else -> return ab.takeIf { it.isNotBlank() }
+    }
+}
 
 private enum class NavStep {
     WELCOME,
@@ -109,7 +137,10 @@ private enum class NavStep {
 }
 
 @Composable
-fun NavFlowScreen(modifier: Modifier = Modifier) {
+fun NavFlowScreen(
+    modifier: Modifier = Modifier,
+    onBack: (() -> Unit)? = null
+) {
     val context = LocalContext.current
     var step by remember { mutableStateOf(NavStep.WELCOME) }
     var currentLocation by remember { mutableStateOf<LocationInfo?>(null) }
@@ -124,6 +155,10 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
     var pendingRetryFor by remember { mutableStateOf<Pair<String, String>?>(null) }
     var listenTimeoutHandled by remember { mutableStateOf(false) }
     var lastPartialMatch by remember { mutableStateOf<String?>(null) }
+    var indoorPathId by remember { mutableStateOf<String?>(null) }
+    var hasLaunchedIndoorGuidance by remember { mutableStateOf(false) }
+    var hasLaunchedGenericIndoor by remember { mutableStateOf(false) }
+    var showOutdoorPicker by remember { mutableStateOf(false) }
 
     val coroutineScope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
@@ -433,14 +468,55 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
                 step = NavStep.NAVIGATING
             }
             NavStep.NAVIGATING -> {
-                if (hasCameraPermission) {
-                    AudioGuide.speak("Camera on. Navigating from ${currentLocation?.fullName ?: "here"} to ${destination?.fullName ?: "destination"}.")
+                val originId = locationToNodeId(currentLocation)
+                val destId = locationToNodeId(destination)
+                if (originId != null && destId != null) {
+                    val repo = CampusGraphRepository(context)
+                    indoorPathId = repo.getIndoorPathId(originId, destId)
                 } else {
-                    cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                    indoorPathId = null
+                }
+                if (indoorPathId != null) {
+                    if (hasCameraPermission) {
+                        AudioGuide.speak("Opening indoor guidance with QR scanning from ${currentLocation?.fullName ?: "here"} to ${destination?.fullName ?: "destination"}.")
+                    } else {
+                        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                    }
+                } else {
+                    AudioGuide.speak("Opening indoor directions from ${currentLocation?.fullName ?: "here"} to ${destination?.fullName ?: "destination"}.")
                 }
             }
         }
     }
+
+    LaunchedEffect(indoorPathId, hasLaunchedIndoorGuidance) {
+        if (step != NavStep.NAVIGATING || indoorPathId == null || hasLaunchedIndoorGuidance) return@LaunchedEffect
+        hasLaunchedIndoorGuidance = true
+        context.startActivity(
+            Intent(context, CameraNavigationActivity::class.java).apply {
+                putExtra(CameraNavigationActivity.EXTRA_PATH_ID, indoorPathId)
+                putExtra(CameraNavigationActivity.EXTRA_PATH_NAME, indoorPathId)
+            }
+        )
+    }
+
+    LaunchedEffect(step, indoorPathId, hasLaunchedGenericIndoor, currentLocation, destination) {
+        if (step != NavStep.NAVIGATING || indoorPathId != null || hasLaunchedGenericIndoor) return@LaunchedEffect
+        val originId = locationToNodeId(currentLocation) ?: return@LaunchedEffect
+        val destId = locationToNodeId(destination) ?: return@LaunchedEffect
+        if (originId == destId) return@LaunchedEffect
+        hasLaunchedGenericIndoor = true
+        context.startActivity(
+            Intent(context, IndoorGenericNavigationActivity::class.java).apply {
+                putExtra(IndoorGenericNavigationActivity.EXTRA_ORIGIN_ID, originId)
+                putExtra(IndoorGenericNavigationActivity.EXTRA_DEST_ID, destId)
+            }
+        )
+    }
+
+    val campusRepo = remember { CampusGraphRepository(context) }
+    val (resolvedNodes, _) = remember { campusRepo.getNodesForPicker() }
+    val nodeOptions = remember(resolvedNodes) { resolvedNodes.sortedBy { it.node.name } }
 
     val innerPageBg = UofACharcoal
 
@@ -455,6 +531,22 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
     )
 
     Column(modifier = modifier.fillMaxSize()) {
+        if (showOutdoorPicker) {
+            OutdoorPickerContent(
+                nodeOptions = nodeOptions,
+                onStart = { originId, destId ->
+                    context.startActivity(
+                        Intent(context, OutdoorNavigationActivity::class.java).apply {
+                            putExtra(OutdoorNavigationActivity.EXTRA_ORIGIN_ID, originId)
+                            putExtra(OutdoorNavigationActivity.EXTRA_DEST_ID, destId)
+                        }
+                    )
+                    showOutdoorPicker = false
+                },
+                onBack = { showOutdoorPicker = false },
+                modifier = Modifier.fillMaxSize().padding(24.dp)
+            )
+        } else {
         Column(modifier = Modifier.fillMaxWidth()) {
             Box(
                 modifier = Modifier
@@ -463,15 +555,40 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
                     .background(UofAGold)
                     .padding(horizontal = 12.dp, vertical = 32.dp)
             ) {
-                Text(
-                    "AccessU",
-                    style = MaterialTheme.typography.displayMedium,
-                    color = UofAGreenDark,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = NunitoFont,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Start
-                )
+                if (onBack != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "← Back",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = UofAGreenDark,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = NunitoFont,
+                            modifier = Modifier.clickable { onBack() }
+                        )
+                        Text(
+                            "AccessU",
+                            style = MaterialTheme.typography.displayMedium,
+                            color = UofAGreenDark,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = NunitoFont
+                        )
+                        Spacer(modifier = Modifier.width(64.dp))
+                    }
+                } else {
+                    Text(
+                        "AccessU",
+                        style = MaterialTheme.typography.displayMedium,
+                        color = UofAGreenDark,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = NunitoFont,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Start
+                    )
+                }
             }
             Box(
                 modifier = Modifier
@@ -505,11 +622,6 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
                 .alpha(pageBgOpacity),
             contentScale = ContentScale.Crop
         )
-        if (step == NavStep.NAVIGATING && hasCameraPermission) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                ObstacleCameraScreen(isActive = true)
-            }
-        }
         if (step == NavStep.WELCOME) {
             var taglineVisible by remember { mutableStateOf(false) }
             LaunchedEffect(Unit) { delay(800); taglineVisible = true }
@@ -550,13 +662,14 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
         ) {
             when (step) {
                 NavStep.WELCOME -> {
-                    Box(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(floatingBoxModifier)
                             .background(UofAGold)
                             .border(4.dp, UofAWhite, RoundedCornerShape(24.dp))
-                            .padding(36.dp)
+                            .padding(36.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         Text(
                             "Tap anywhere to begin",
@@ -567,6 +680,12 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
                             modifier = Modifier.fillMaxWidth(),
                             textAlign = TextAlign.Center
                         )
+                        Button(
+                            onClick = { showOutdoorPicker = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Outdoor Map Navigation")
+                        }
                     }
                 }
                 NavStep.ASK_LOCATION, NavStep.SHOW_LOCATION -> {
@@ -902,6 +1021,58 @@ fun NavFlowScreen(modifier: Modifier = Modifier) {
                 else -> {}
             }
         }
+        }
+        }
+    }
+}
+
+@Composable
+private fun OutdoorPickerContent(
+    nodeOptions: List<ResolvedNode>,
+    onStart: (originId: String, destId: String) -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var originId by remember { mutableStateOf<String?>(null) }
+    var destId by remember { mutableStateOf<String?>(null) }
+    Column(
+        modifier = modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text("Outdoor Map Navigation", style = MaterialTheme.typography.headlineMedium)
+        Text("Select start and destination. Uses map and GPS.", style = MaterialTheme.typography.bodyMedium)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text("Start", style = MaterialTheme.typography.labelLarge)
+        nodeOptions.forEach { r ->
+            Button(
+                onClick = { originId = r.node.id },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(r.node.name)
+            }
+        }
+        Text("Destination", style = MaterialTheme.typography.labelLarge)
+        nodeOptions.forEach { r ->
+            Button(
+                onClick = { destId = r.node.id },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(r.node.name)
+            }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = {
+                val o = originId
+                val d = destId
+                if (o != null && d != null && o != d) onStart(o, d)
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Start outdoor navigation")
+        }
+        Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+            Text("Back")
         }
     }
 }

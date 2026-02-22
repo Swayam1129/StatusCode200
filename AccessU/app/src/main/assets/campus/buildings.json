@@ -41,6 +41,7 @@
     "ccis_to_cameron": {"origin":"ccis","destination":"cameron","description":"Indoor QR route via Chem and CAB"},
     "etlc_to_gsb": {"origin":"etlc","destination":"gsb","description":"Indoor QR route ETLC to GSB"},
     "etlc_to_busstop": {"origin":"etlc","destination":"university_transit","description":"Indoor QR route to bus stop"},
-    "ccis_to_etlc": {"origin":"ccis","destination":"etlc","description":"Indoor QR route CCIS to ETLC"}
+    "ccis_to_etlc": {"origin":"ccis","destination":"etlc","description":"Indoor QR route CCIS to ETLC"},
+    "etlc_to_nref": {"origin":"etlc","destination":"nref","description":"Indoor QR route ETLC to NREF"}
   }
 }

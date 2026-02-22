@@ -1,5 +1,6 @@
 [
   {"id":"ccis_to_cameron","name":"CCIS to Cameron Library","description":"Indoor path from CCIS to Cameron Library via Chem and CAB","origin":"CCIS","destination":"Cameron Library","keyframeCount":0,"estimatedDurationSeconds":300},
   {"id":"etlc_to_busstop","name":"ETLC to Bus Stop","description":"Indoor path from ETLC to University Transit Centre bus stop","origin":"ETLC","destination":"University Transit Centre","keyframeCount":0,"estimatedDurationSeconds":120},
-  {"id":"ccis_to_etlc","name":"CCIS to ETLC","description":"Indoor path from CCIS to ETLC building","origin":"CCIS","destination":"ETLC","keyframeCount":0,"estimatedDurationSeconds":180}
+  {"id":"ccis_to_etlc","name":"CCIS to ETLC","description":"Indoor path from CCIS to ETLC building","origin":"CCIS","destination":"ETLC","keyframeCount":0,"estimatedDurationSeconds":180},
+  {"id":"etlc_to_nref","name":"ETLC to NREF","description":"Indoor path from ETLC to NREF via elevator and pedway","origin":"ETLC","destination":"NREF","keyframeCount":0,"estimatedDurationSeconds":300}
 ]

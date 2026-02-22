@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CCIS → Cameron QR Test Page</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    /* AccessU / U of A theme: green primary, gold accent, cream background */
+    :root {
+      --uofa-green: #007C41;
+      --uofa-green-dark: #004D28;
+      --uofa-green-light: #0A9B5A;
+      --uofa-green-bg: #E8F5EE;
+      --uofa-gold: #FFDB05;
+      --uofa-gold-light: #FFE94D;
+      --uofa-white: #F8F9FA;
+      --uofa-cream: #F5F3EF;
+      --uofa-charcoal: #2C3E50;
+      --uofa-slate: #5A6C7D;
+      --uofa-warm-gray: #6B7280;
+      --wrong-border: #C62828;
+      --wrong-bg: #FFEBEE;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 16px;
+      font-family: 'Nunito', system-ui, -apple-system, sans-serif;
+      background: var(--uofa-cream);
+      color: var(--uofa-charcoal);
+      min-height: 100vh;
+    }
+    .note {
+      background: var(--uofa-green-bg);
+      border: 2px solid var(--uofa-green);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      font-weight: 700;
+      color: var(--uofa-green-dark);
+    }
+    .controls {
+      margin-bottom: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    .controls button {
+      padding: 10px 18px;
+      font-size: 1rem;
+      font-family: 'Nunito', sans-serif;
+      font-weight: 700;
+      cursor: pointer;
+      background: var(--uofa-green);
+      color: var(--uofa-gold-light);
+      border: 2px solid var(--uofa-green-dark);
+      border-radius: 8px;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .controls button:hover {
+      background: var(--uofa-green-dark);
+    }
+    .controls button:active {
+      transform: scale(0.98);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+    .card {
+      border: 2px solid var(--uofa-green);
+      border-radius: 12px;
+      padding: 12px;
+      background: var(--uofa-white);
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0, 124, 65, 0.08);
+    }
+    .card.wrong {
+      border-color: var(--wrong-border);
+      background: var(--wrong-bg);
+      box-shadow: 0 2px 8px rgba(198, 40, 40, 0.08);
+    }
+    .card .qr-wrap {
+      min-height: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 8px;
+    }
+    .card .qr-wrap canvas,
+    .card .qr-wrap img,
+    .card .qr-wrap table {
+      max-width: 100%;
+      height: auto;
+    }
+    .card .node-id {
+      font-weight: 700;
+      font-size: 0.9rem;
+      margin-bottom: 4px;
+      color: var(--uofa-green-dark);
+    }
+    .card.wrong .node-id { color: var(--wrong-border); }
+    .card .name {
+      font-size: 0.85rem;
+      margin-bottom: 4px;
+      line-height: 1.2;
+      color: var(--uofa-charcoal);
+    }
+    .card .payload {
+      font-size: 0.75rem;
+      color: var(--uofa-slate);
+      word-break: break-all;
+    }
+    @media print {
+      body { padding: 8px; background: #fff; }
+      .controls { display: none; }
+      .note { margin-bottom: 12px; }
+      .grid { gap: 16px; }
+      .card { box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <p class="note">Scan these using AccessU indoor QR navigation.</p>
+
+  <div class="controls">
+    <button type="button" id="btn-bigger">Bigger</button>
+    <button type="button" id="btn-medium">Medium</button>
+    <button type="button" id="btn-small">Smaller</button>
+    <button type="button" id="btn-print">Print</button>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <script>
+    // QR size in pixels (one dimension). Bigger = larger, easier to scan.
+    var qrSize = 180;
+
+    var nodes = [
+      { payload: 'ccis_to_cameron:n1', name: 'CCIS entrance' },
+      { payload: 'ccis_to_cameron:n2', name: 'Student Services corridor' },
+      { payload: 'ccis_to_cameron:n3', name: 'Door to Chemistry' },
+      { payload: 'ccis_to_cameron:n4', name: 'Chemistry hallway' },
+      { payload: 'ccis_to_cameron:n5', name: 'Turn left to CAB' },
+      { payload: 'ccis_to_cameron:n6', name: 'CAB and Cameron intersection' },
+      { payload: 'ccis_to_cameron:n7', name: 'Stairs to Cameron' },
+      { payload: 'ccis_to_cameron:n8', name: 'Cameron main desk' }
+    ];
+    var wrongPathDemo = { payload: 'ccis_to_cameron:n4_1', name: 'Wrong turn demo QR', wrong: true };
+    var wrongNode = { payload: 'wrong_route:n3', name: 'Wrong route (test off-path)', wrong: true };
+
+    function drawAll() {
+      var grid = document.getElementById('grid');
+      grid.innerHTML = '';
+
+      function addCard(item) {
+        var card = document.createElement('div');
+        card.className = 'card' + (item.wrong ? ' wrong' : '');
+        var nodeId = item.payload.split(':')[1] || item.payload;
+        var name = item.name || item.payload;
+
+        var qrWrap = document.createElement('div');
+        qrWrap.className = 'qr-wrap';
+        card.appendChild(qrWrap);
+
+        try {
+          new QRCode(qrWrap, {
+            text: item.payload,
+            width: qrSize,
+            height: qrSize
+          });
+        } catch (e) {
+          qrWrap.innerHTML = '<span style="color:red">QR error: ' + String(e) + '</span>';
+        }
+
+        var nodeIdEl = document.createElement('div');
+        nodeIdEl.className = 'node-id';
+        nodeIdEl.textContent = nodeId;
+        card.appendChild(nodeIdEl);
+
+        var nameEl = document.createElement('div');
+        nameEl.className = 'name';
+        nameEl.textContent = name;
+        card.appendChild(nameEl);
+
+        var payloadEl = document.createElement('div');
+        payloadEl.className = 'payload';
+        payloadEl.textContent = item.payload;
+        card.appendChild(payloadEl);
+
+        grid.appendChild(card);
+      }
+
+      nodes.forEach(addCard);
+      addCard(wrongPathDemo);
+      addCard(wrongNode);
+    }
+
+    document.getElementById('btn-bigger').onclick = function () {
+      qrSize = Math.min(320, qrSize + 40);
+      drawAll();
+    };
+    document.getElementById('btn-medium').onclick = function () {
+      qrSize = 180;
+      drawAll();
+    };
+    document.getElementById('btn-small').onclick = function () {
+      qrSize = Math.max(80, qrSize - 40);
+      drawAll();
+    };
+    document.getElementById('btn-print').onclick = function () {
+      window.print();
+    };
+
+    function init() {
+      if (typeof QRCode !== 'undefined') {
+        drawAll();
+      } else {
+        document.getElementById('grid').innerHTML = '<p>Loading QR library… Refresh if this stays.</p>';
+        setTimeout(init, 200);
+      }
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</body>
+</html>

@@ -3,6 +3,8 @@ package com.example.accessu.paths
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.widget.ArrayAdapter
@@ -32,7 +34,7 @@ class CameraNavigationActivity : ComponentActivity() {
         const val EXTRA_PATH_ID = "path_id"
         const val EXTRA_PATH_NAME = "path_name"
         private const val TAG = "CameraNav"
-        private const val SAME_SCAN_COOLDOWN_MS = 2000L
+        private const val SAME_SCAN_COOLDOWN_MS = 60_000L  // 1 minute: same QR ignored until user has time to move to next checkpoint
     }
 
     private var pathGraph: PathGraph? = null
@@ -151,6 +153,7 @@ class CameraNavigationActivity : ComponentActivity() {
 
     /** Extract action-focused instruction: first 1–2 actionable sentences. Prefer Turn/Continue/Walk/Stop. */
     private fun toActionInstruction(instruction: String): String {
+        if (instruction.contains("Automatic door ahead.")) return "Automatic door ahead."
         val sentences = instruction.split(Regex("\\.\\s+")).filter { it.isNotBlank() }
         val actionStarts = listOf("turn", "continue", "walk", "stop", "go", "head", "pass")
         val actionSentences = sentences.filter { s ->
@@ -185,43 +188,19 @@ class CameraNavigationActivity : ComponentActivity() {
         return if (hazards.isEmpty()) "" else hazards.joinToString(" ")
     }
 
-    /** Build message: A Confirmation, B Current hazard, C Action, D Next hazard pre-warning (if any, no repeat), E Next checkpoint. */
+    /** Build message: for first/last node no "On right path"; otherwise "On right path." then instruction. First/last use full instruction; middle use action-only. */
     private fun buildGuidanceMessage(
         currentNode: Node,
         nextNode: Node?,
-        isOffRoute: Boolean
+        isOffRoute: Boolean,
+        isFirstScan: Boolean
     ): String {
-        spokenConfirmation = "Checkpoint confirmed: ${currentNode.name}."
-        val currentHazard = addHazardPhrasing(currentNode.instruction)
-        val actionRaw = toActionInstruction(currentNode.instruction)
-        spokenAction = buildString {
-            if (currentHazard.isNotEmpty()) append("$currentHazard ")
-            append(actionRaw)
-        }
-
-        val currentLower = currentNode.instruction.lowercase()
-        var nextPreWarning = detectHazard(nextNode)
-        if (nextPreWarning != null) {
-            val nextLower = nextNode!!.instruction.lowercase()
-            if (nextLower.contains("door") && currentLower.contains("door")) nextPreWarning = null
-            if ((nextLower.contains("stairs") || nextLower.contains("steps")) &&
-                (currentLower.contains("stairs") || currentLower.contains("steps"))) nextPreWarning = null
-        }
-
-        spokenNextCheckpoint = if (nextNode == null) {
-            "You have reached your destination."
-        } else {
-            "Next checkpoint: ${nextNode.name}. Scan the next QR when you reach it."
-        }
-
+        val instructionText = if (isFirstScan) currentNode.instruction else toActionInstruction(currentNode.instruction)
+        spokenAction = instructionText
         return buildString {
             if (isOffRoute) append("Off route. Rerouting. Stay at this checkpoint. I will guide you from here. ")
-            append(spokenConfirmation!!)
-            append(" ")
-            append(spokenAction!!)
-            if (nextPreWarning != null) append(" $nextPreWarning")
-            append(" ")
-            append(spokenNextCheckpoint!!)
+            if (!isFirstScan) append("On right path. ")
+            append(instructionText)
         }
     }
 
@@ -300,28 +279,29 @@ class CameraNavigationActivity : ComponentActivity() {
 
         barcodeScanner?.process(image)
             ?.addOnSuccessListener { barcodes ->
-                if (barcodes.isNotEmpty()) {
-                    barcodes.firstOrNull()?.rawValue?.let { handleQrScanned(it) }
-                }
+                val raw = barcodes.firstOrNull()?.rawValue?.trim()
+                if (!raw.isNullOrEmpty()) handleQrScanned(raw)
                 imageProxy.close()
             }
             ?.addOnFailureListener { imageProxy.close() }
     }
 
     private fun handleQrScanned(rawValue: String) {
+        val value = rawValue.trim()
+        if (value.isEmpty()) return
         val now = System.currentTimeMillis()
-        if (rawValue == lastPayload && (now - lastPayloadAt) < SAME_SCAN_COOLDOWN_MS) return
-        lastPayload = rawValue
+        if (value == lastPayload && (now - lastPayloadAt) < SAME_SCAN_COOLDOWN_MS) return
+        lastPayload = value
         lastPayloadAt = now
 
         val (scannedPathId, scannedNodeId) = when {
-            rawValue.contains(":") -> {
-                val parts = rawValue.split(":", limit = 2)
+            value.contains(":") -> {
+                val parts = value.split(":", limit = 2)
                 if (parts.size == 2) parts[0].trim() to parts[1].trim() else return
             }
-            rawValue.contains("_") -> {
-                val lastUnderscore = rawValue.lastIndexOf('_')
-                if (lastUnderscore > 0) rawValue.take(lastUnderscore) to rawValue.drop(lastUnderscore + 1)
+            value.contains("_") -> {
+                val lastUnderscore = value.lastIndexOf('_')
+                if (lastUnderscore > 0) value.take(lastUnderscore) to value.drop(lastUnderscore + 1)
                 else return
             }
             else -> return
@@ -344,20 +324,10 @@ class CameraNavigationActivity : ComponentActivity() {
         val destId = destinationNodeId ?: return
 
         if (scannedNodeId == destId) {
-            spokenConfirmation = "Checkpoint confirmed: ${node.name}."
-            spokenAction = toActionInstruction(node.instruction)
-            spokenNextCheckpoint = "You have reached your destination."
-            val hazard = addHazardPhrasing(node.instruction)
-            val msg = buildString {
-                append(spokenConfirmation!!)
-                append(" ")
-                if (hazard.isNotEmpty()) append("$hazard ")
-                append(spokenAction!!)
-                append(" ")
-                append(spokenNextCheckpoint!!)
-            }
-            lastFullSpokenMessage = msg
-            speak(msg)
+            spokenAction = node.instruction
+            lastFullSpokenMessage = node.instruction
+            speak(node.instruction)
+            scheduleAutomaticDoorFollowUp(node)
             lastComputedPath = emptyList()
             expectedNextNodeId = null
         } else {
@@ -378,12 +348,22 @@ class CameraNavigationActivity : ComponentActivity() {
                 lastComputedPath = path
                 expectedNextNodeId = path.getOrNull(1)
                 val nextNode = graph.nodes.find { it.id == path[1] }
-                val msg = buildGuidanceMessage(node, nextNode, isOffRoute)
+                val isFirstScan = previousCurrentNodeId == null
+                val msg = buildGuidanceMessage(node, nextNode, isOffRoute, isFirstScan)
                 lastFullSpokenMessage = msg
                 speak(msg)
+                scheduleAutomaticDoorFollowUp(node)
             }
         }
         updateDebugState()
+    }
+
+    /** For automatic-door nodes: after main message, wait 2s then speak "You may continue." (minimal, door nodes only). */
+    private fun scheduleAutomaticDoorFollowUp(node: Node) {
+        if (!node.instruction.contains("Automatic door ahead.") || !node.instruction.contains("You may continue.")) return
+        Handler(Looper.getMainLooper()).postDelayed({
+            speak("You may continue.", TextToSpeech.QUEUE_ADD)
+        }, 2000L)
     }
 
     override fun onDestroy() {

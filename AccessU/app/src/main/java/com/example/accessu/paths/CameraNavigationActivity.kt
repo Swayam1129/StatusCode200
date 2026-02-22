@@ -2,14 +2,14 @@ package com.example.accessu.paths
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Bundle
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.util.Log
-import android.widget.ArrayAdapter
 import android.widget.FrameLayout
-import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -64,6 +64,9 @@ class CameraNavigationActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            window.statusBarColor = Color.parseColor("#FFDB05")
+        }
         setContentView(R.layout.activity_camera_navigation)
 
         val pathId = (intent.getStringExtra(EXTRA_PATH_ID) ?: "").trim()
@@ -147,7 +150,9 @@ class CameraNavigationActivity : ComponentActivity() {
 
     private fun speak(msg: String, queueMode: Int = TextToSpeech.QUEUE_FLUSH) {
         lastSpokenInstruction = msg
-        updateDebugState()
+        runOnUiThread {
+            findViewById<TextView>(R.id.transcript)?.text = msg
+        }
         tts?.speak(msg, queueMode, null, "nav")
     }
 
@@ -204,51 +209,13 @@ class CameraNavigationActivity : ComponentActivity() {
         }
     }
 
-    private fun updateDebugState() {
-        val view = findViewById<TextView>(R.id.debug_state)
-        val graph = pathGraph
-        if (view != null && graph != null) {
-            val destId = destinationNodeId ?: "—"
-            val pathStr = if (lastComputedPath.isEmpty()) "—" else lastComputedPath.joinToString("->")
-            val nextId = lastComputedPath.getOrNull(1) ?: "—"
-            view.text = buildString {
-                append("currentNodeId: ${currentNodeId ?: "—"}\n")
-                append("destinationNodeId: $destId\n")
-                append("computedPath: $pathStr\n")
-                append("nextNodeId: $nextId\n")
-                append("expectedNextNodeId: ${expectedNextNodeId ?: "—"}\n")
-                append("spokenConfirmation: ${spokenConfirmation?.take(40) ?: "—"}\n")
-                append("spokenAction: ${spokenAction?.take(40) ?: "—"}\n")
-                append("spokenNextCheckpoint: ${spokenNextCheckpoint?.take(40) ?: "—"}")
-            }
-        }
-    }
+    private fun updateDebugState() {}
 
-    private fun setupSimulateScanUi() {
-        val graph = pathGraph ?: return
-        val nodeIds = graph.nodes.map { it.id }
-        val spinner = findViewById<Spinner>(R.id.node_spinner)
-        if (spinner != null && nodeIds.isNotEmpty()) {
-            spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, nodeIds).apply {
-                setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-            }
-        }
-        findViewById<android.widget.Button>(R.id.btn_simulate_scan)?.setOnClickListener {
-            val selectedId = (spinner?.selectedItem as? String) ?: nodeIds.firstOrNull() ?: return@setOnClickListener
-            handleQrScanned("${graph.pathId}:$selectedId")
-        }
-        findViewById<android.widget.Button>(R.id.btn_simulate_wrong_path)?.setOnClickListener {
-            handleQrScanned("some_other_path:n3")
-        }
-        findViewById<android.widget.Button>(R.id.btn_repeat_instruction)?.setOnClickListener {
-            val msg = lastFullSpokenMessage
-            if (!msg.isNullOrBlank()) tts?.speak(msg, TextToSpeech.QUEUE_FLUSH, null, "nav")
-        }
-        updateDebugState()
-    }
+    private fun setupSimulateScanUi() {}
 
     private fun startCamera() {
         val container = findViewById<FrameLayout>(R.id.camera_container)
+        if (container == null) return
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()

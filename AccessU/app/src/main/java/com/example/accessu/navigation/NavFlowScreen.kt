@@ -35,7 +35,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -158,6 +163,7 @@ fun NavFlowScreen(
     var indoorPathId by remember { mutableStateOf<String?>(null) }
     var hasLaunchedIndoorGuidance by remember { mutableStateOf(false) }
     var hasLaunchedGenericIndoor by remember { mutableStateOf(false) }
+    var noIndoorPathMessage by remember { mutableStateOf<String?>(null) }
     var showOutdoorPicker by remember { mutableStateOf(false) }
 
     val coroutineScope = rememberCoroutineScope()
@@ -445,9 +451,7 @@ fun NavFlowScreen(
                 else micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
             }
             NavStep.SHOW_LOCATION -> {
-                AudioGuide.speak("Tap on the screen for next move.")
-                delay(5000)
-                step = NavStep.ASK_DESTINATION
+                AudioGuide.speak("Tap the screen when you are ready for the next step.")
             }
             NavStep.ASK_DESTINATION -> {
                 if (hasMicPermission) askDestinationAndListen()
@@ -489,10 +493,24 @@ fun NavFlowScreen(
         }
     }
 
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { _ ->
+        step = NavStep.WELCOME
+        currentLocation = null
+        currentLocationTranscribed = null
+        destination = null
+        destinationTranscribed = null
+        indoorPathId = null
+        hasLaunchedIndoorGuidance = false
+        hasLaunchedGenericIndoor = false
+        noIndoorPathMessage = null
+    }
+
     LaunchedEffect(indoorPathId, hasLaunchedIndoorGuidance) {
         if (step != NavStep.NAVIGATING || indoorPathId == null || hasLaunchedIndoorGuidance) return@LaunchedEffect
         hasLaunchedIndoorGuidance = true
-        context.startActivity(
+        cameraLauncher.launch(
             Intent(context, CameraNavigationActivity::class.java).apply {
                 putExtra(CameraNavigationActivity.EXTRA_PATH_ID, indoorPathId)
                 putExtra(CameraNavigationActivity.EXTRA_PATH_NAME, indoorPathId)
@@ -502,16 +520,10 @@ fun NavFlowScreen(
 
     LaunchedEffect(step, indoorPathId, hasLaunchedGenericIndoor, currentLocation, destination) {
         if (step != NavStep.NAVIGATING || indoorPathId != null || hasLaunchedGenericIndoor) return@LaunchedEffect
-        val originId = locationToNodeId(currentLocation) ?: return@LaunchedEffect
-        val destId = locationToNodeId(destination) ?: return@LaunchedEffect
-        if (originId == destId) return@LaunchedEffect
         hasLaunchedGenericIndoor = true
-        context.startActivity(
-            Intent(context, IndoorGenericNavigationActivity::class.java).apply {
-                putExtra(IndoorGenericNavigationActivity.EXTRA_ORIGIN_ID, originId)
-                putExtra(IndoorGenericNavigationActivity.EXTRA_DEST_ID, destId)
-            }
-        )
+        val msg = "No indoor path for this route. Try CCIS to Cameron or another supported route."
+        noIndoorPathMessage = msg
+        AudioGuide.speak(msg)
     }
 
     val campusRepo = remember { CampusGraphRepository(context) }
@@ -551,9 +563,10 @@ fun NavFlowScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .statusBarsPadding()
                     .background(UofAGold)
-                    .padding(horizontal = 12.dp, vertical = 32.dp)
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                contentAlignment = Alignment.CenterStart
             ) {
                 if (onBack != null) {
                     Row(
@@ -571,7 +584,7 @@ fun NavFlowScreen(
                         )
                         Text(
                             "AccessU",
-                            style = MaterialTheme.typography.displayMedium,
+                            style = MaterialTheme.typography.displayLarge,
                             color = UofAGreenDark,
                             fontWeight = FontWeight.Bold,
                             fontFamily = NunitoFont
@@ -581,11 +594,10 @@ fun NavFlowScreen(
                 } else {
                     Text(
                         "AccessU",
-                        style = MaterialTheme.typography.displayMedium,
+                        style = MaterialTheme.typography.displayLarge,
                         color = UofAGreenDark,
                         fontWeight = FontWeight.Bold,
                         fontFamily = NunitoFont,
-                        modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.Start
                     )
                 }
@@ -680,12 +692,6 @@ fun NavFlowScreen(
                             modifier = Modifier.fillMaxWidth(),
                             textAlign = TextAlign.Center
                         )
-                        Button(
-                            onClick = { showOutdoorPicker = true },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Outdoor Map Navigation")
-                        }
                     }
                 }
                 NavStep.ASK_LOCATION, NavStep.SHOW_LOCATION -> {
@@ -989,7 +995,23 @@ fun NavFlowScreen(
                     }
                 }
                 NavStep.NAVIGATING -> {
-                    if (!hasCameraPermission) {
+                    if (noIndoorPathMessage != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                noIndoorPathMessage!!,
+                                style = MaterialTheme.typography.headlineLarge,
+                                color = UofAWhite,
+                                textAlign = TextAlign.Center,
+                                fontWeight = FontWeight.SemiBold,
+                                fontFamily = NunitoFont
+                            )
+                        }
+                    } else if (!hasCameraPermission) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()

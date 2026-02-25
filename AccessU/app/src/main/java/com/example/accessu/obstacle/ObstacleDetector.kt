@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.objects.DetectedObject
 import com.google.mlkit.vision.objects.ObjectDetection
 import com.google.mlkit.vision.objects.ObjectDetector
 import com.google.mlkit.vision.objects.defaults.ObjectDetectorOptions
@@ -11,9 +12,10 @@ import com.example.accessu.obstacle.CameraPipeline.FrameData
 
 class ObstacleDetector(private val context: Context) {
 
-    private val objectDetector: ObjectDetector by lazy {
+    // Expose the detector so the new QR camera screen can feed it directly
+    val objectDetector: ObjectDetector by lazy {
         val options = ObjectDetectorOptions.Builder()
-            .setDetectorMode(ObjectDetectorOptions.SINGLE_IMAGE_MODE)
+            .setDetectorMode(ObjectDetectorOptions.STREAM_MODE)
             .enableMultipleObjects()
             .build()
         ObjectDetection.getClient(options)
@@ -25,6 +27,7 @@ class ObstacleDetector(private val context: Context) {
     private var lastStateWasObstacle: Boolean = false
     private var hasSpokenInitialClear: Boolean = false
 
+    // 1. THIS FIXES THE ERRORS: The helper for ObstacleCameraScreen.kt
     fun processFrame(frame: FrameData): String? {
         val bitmap = frame.bitmap ?: return null
         if (bitmap.width < 32 || bitmap.height < 32) return null
@@ -34,45 +37,8 @@ class ObstacleDetector(private val context: Context) {
             val task = objectDetector.process(inputImage)
             val detectedObjects = Tasks.await(task)
 
-            val isPortrait = frame.rotationDegrees == 90 || frame.rotationDegrees == 270
-            val actualWidth = if (isPortrait) frame.height else frame.width
-            val actualHeight = if (isPortrait) frame.width else frame.height
-
-            val message = analyzeDetections(detectedObjects, actualWidth, actualHeight)
-
-            val now = System.currentTimeMillis()
-            val timeSinceLastSpeak = now - lastSpokenTimeMs
-
-            val result = when {
-                message.contains("Obstacle") -> {
-                    lastStateWasObstacle = true
-                    hasSpokenInitialClear = true
-
-                    if (timeSinceLastSpeak >= globalCooldownMs) {
-                        lastSpokenMessage = message
-                        lastSpokenTimeMs = now
-                        message
-                    } else {
-                        null
-                    }
-                }
-                else -> {
-                    if (lastStateWasObstacle && timeSinceLastSpeak >= globalCooldownMs) {
-                        lastStateWasObstacle = false
-                        lastSpokenMessage = message
-                        lastSpokenTimeMs = now
-                        message
-                    } else if (!hasSpokenInitialClear) {
-                        hasSpokenInitialClear = true
-                        lastSpokenMessage = message
-                        lastSpokenTimeMs = now
-                        message
-                    } else {
-                        null
-                    }
-                }
-            }
-
+            // Pass the data into our new, smarter detection logic
+            val result = processDetections(detectedObjects, frame.width, frame.height, frame.rotationDegrees)
             bitmap.recycle()
             result
         } catch (e: Exception) {
@@ -82,24 +48,64 @@ class ObstacleDetector(private val context: Context) {
         }
     }
 
+    // 2. The main logic used by your new CameraNavigationActivity.kt
+    fun processDetections(
+        detectedObjects: List<DetectedObject>,
+        imageWidth: Int,
+        imageHeight: Int,
+        rotationDegrees: Int
+    ): String? {
+        val isPortrait = rotationDegrees == 90 || rotationDegrees == 270
+        val actualWidth = if (isPortrait) imageHeight else imageWidth
+        val actualHeight = if (isPortrait) imageWidth else imageHeight
+
+        val message = analyzeDetections(detectedObjects, actualWidth, actualHeight)
+
+        val now = System.currentTimeMillis()
+        val timeSinceLastSpeak = now - lastSpokenTimeMs
+
+        val result = when {
+            message.contains("Obstacle") -> {
+                lastStateWasObstacle = true
+                hasSpokenInitialClear = true
+
+                if (timeSinceLastSpeak >= globalCooldownMs) {
+                    lastSpokenMessage = message
+                    lastSpokenTimeMs = now
+                    message
+                } else null
+            }
+            else -> {
+                if (lastStateWasObstacle && timeSinceLastSpeak >= globalCooldownMs) {
+                    lastStateWasObstacle = false
+                    lastSpokenMessage = message
+                    lastSpokenTimeMs = now
+                    message
+                } else if (!hasSpokenInitialClear) {
+                    hasSpokenInitialClear = true
+                    lastSpokenMessage = message
+                    lastSpokenTimeMs = now
+                    message
+                } else null
+            }
+        }
+        return result
+    }
+
     private fun analyzeDetections(
-        detectedObjects: List<com.google.mlkit.vision.objects.DetectedObject>,
+        detectedObjects: List<DetectedObject>,
         imageWidth: Int,
         imageHeight: Int
     ): String {
         val centerX = imageWidth / 2f
         val totalPixels = imageWidth * imageHeight
 
-        // 50% Path: Strict shoulder-width cylinder
         val centerPathLeft = imageWidth * 0.25f
         val centerPathRight = imageWidth * 0.75f
 
-        // HORIZON FIX: Raised back up to 15% to see people walking towards you from further away
         val pathTop = imageHeight * 0.15f
         val pathBottom = imageHeight * 1.0f
 
-        // SIZE FIX: Minimum size is still 1%, but Maximum size is now 100% (1.0f).
-        // If a massive door takes up the whole screen, DO NOT ignore it!
         val minBboxArea = totalPixels * 0.01f
         val maxBboxArea = totalPixels * 1.0f
 
@@ -127,10 +133,6 @@ class ObstacleDetector(private val context: Context) {
             }
         }
 
-        return if (mostUrgentObstacle != null) {
-            mostUrgentObstacle!!.first
-        } else {
-            "Path is clear."
-        }
+        return if (mostUrgentObstacle != null) mostUrgentObstacle!!.first else "Path is clear."
     }
 }
